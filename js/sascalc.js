@@ -142,7 +142,8 @@ var Stat = function() {
     stat.sy3 = 10000; //nonlinear coeff
 
     stat.dtsize = 650; // detector size in mm
-    stat.dtdist = 13170; // detector distance in mm
+    stat.dtdist = 10000; // detector distance in mm
+    //stat.dtdist = 13170; // detector distance in mm
 
     stat.dr = 1; // annulus width set by user, default is one
     stat.ddr = stat.dr * stat.sx; //step size, in mm
@@ -151,17 +152,30 @@ var Stat = function() {
     stat.large_num = 1;
     stat.small_num = 1e-10;
 
-    stat.bs = 76.2;
-    stat.s1 = 50;
-    stat.s2 = 6.35;
-    stat.l1 = sourceToSampleDist(1, 54.8, 5, "chamber");
-    stat.l2 = 13.17;
-    stat.lambdaWidth = 0.125;
+    stat.bs = 50.8;
+    stat.s1 = 14.3;
+    stat.s2 = 12.7;
+    stat.l1 = sourceToSampleDist(0, 54.8, 5, "chamber");
     stat.apoff = 5.0;
     stat.ddet = 0.5;
 
-    stat.lambda = 8.4;
+    stat.lambda = 6;
+    stat.lambdaWidth = 0.125;
 };
+
+var stat_props = [
+    {key:"s1", text:"apature diameter", unit:"mm"},
+    {key:"l1", text:"source to sample", unit:"m"},
+    {key:"bs", text:"beamstop diameter", unit:"cm"},
+    {key:"s2", text:"sample apature diameter", unit:"mm"},
+    {text:"Sample Aperture to Detector", unit:"cm", expr:function(stat) {
+        return stat.dtdist/10 + stat.apoff;
+    }},
+    {key:"dtdist", text:"sample chamber to detector", unit:"mm"},
+    {key:"lambda", text:"neutron wavelength", unit:"A"},
+    {key:"lambdaWidth", text:"wavelength spread, FWHM", unit:""},
+    {key:"apoff", text:"sample apature to sample position", unit:"cm"},
+];
 
 Stat.prototype.calculate = function() {
     var stat = this;
@@ -249,11 +263,12 @@ Stat.prototype.calculate = function() {
     }
 
     // ORIG: Do the extra 3 columns of resolution calculations starting here.
+    var l2 = stat.dtdist/1000;
     for(var i = 0; i < nq; i++) {
         var obj = get_resolution(qval[i],
             stat.lambda, stat.lambdaWidth,
             stat.ddet, stat.apoff,
-            stat.s1, stat.s2, stat.l1, stat.l2, stat.bs, stat.ddr);
+            stat.s1, stat.s2, stat.l1, l2, stat.bs, stat.ddr);
 
         sigmaq[i] = obj.sigmaq;
         qbar[i] = obj.qbar;

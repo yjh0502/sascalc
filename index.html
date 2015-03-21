@@ -12,8 +12,8 @@
     <script src="//cdnjs.cloudflare.com/ajax/libs/react/0.13.1/react-with-addons.min.js"></script>
     <script src="//cdnjs.cloudflare.com/ajax/libs/react/0.13.1/JSXTransformer.js"></script>
 
-    <link rel="stylesheet" src="cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.4/css/bootstrap.min.css">
-    <link rel="stylesheet" src="cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.4/css/bootstrap-theme.min.css">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.4/css/bootstrap.min.css">
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.4/css/bootstrap-theme.min.css">
 
 <style>
 text {
@@ -37,13 +37,13 @@ text {
 </head>
 
 <body>
-<div id="root" class="container"/>
+<div id="root"/>
 
 <script type="text/jsx">
 var ChartView = React.createClass({
     getInitialState: function() {
         return {
-            margin: {top: 0, right: 0, bottom: 50, left: 50},
+            margin: {top: 0, right: 0, bottom: 10, left: 30},
             width: 500,
             height: 300,
             m: 1.5,
@@ -146,10 +146,48 @@ var ChartView = React.createClass({
 
     },
 
+    onUpdateParams: function(ev) {
+        var key = ev.target.id;
+        if(key == null)
+            return;
+        var value = ev.target.value;
+
+        var update = {};
+        update[key] = {$set: value};
+
+        this.setState({
+            stat: React.addons.update(this.state.stat, update)
+        });
+    },
+
     render: function() {
         this.renderSvg();
-        return (<div className="container .col-xs-12 .col-md-8">
+
+        var rows = [];
+        for(var i = 0; i < stat_props.length; i++) {
+            var prop = stat_props[i];
+            var value;
+            var disabled = false;
+            if(prop.expr) {
+                value = prop.expr(this.state.stat);
+                disabled = true;
+            } else {
+                value = this.state.stat[prop.key];
+            }
+            rows.push(<tr>
+                <td>{prop.text} ({prop.unit})</td>
+                <td><input ref={prop.key} id={prop.key} type="text" value={value}
+                    onChange={this.onUpdateParams} disabled={disabled}/></td>
+            </tr>);
+        }
+
+        return (<div className=".col-xs-12 .col-md-8">
             <svg ref="svg" width={this.state.width}/>
+            <br/>
+            <table className="table table-condensed">
+                <thead></thead>
+                <tbody>{rows}</tbody>
+            </table>
         </div>);
     }
 });
