@@ -47,6 +47,7 @@ var ChartView = React.createClass({
             width: 500,
             height: 300,
             m: 1.5,
+            stat: new Stat(),
         };
     },
     componentDidMount: function() {
@@ -70,17 +71,19 @@ var ChartView = React.createClass({
         var width = this.state.width - this.state.margin.left - this.state.margin.right;
         var height = this.state.height - this.state.margin.top - this.state.margin.bottom;
 
+        var result = this.state.stat.calculate();
+
         var x = d3.scale.log()
-            .domain([d3.min(stat.qval)/m, d3.max(stat.qval)*m])
+            .domain([d3.min(result.qval)/m, d3.max(result.qval)*m])
             .range([0, width]);
 
         var y = d3.scale.log()
-            .domain([d3.min(stat.aveint)/m, d3.max(stat.aveint)*m])
+            .domain([d3.min(result.aveint)/m, d3.max(result.aveint)*m])
             .range([height, 0]);
 
         var series = [];
-        for(var i = 0; i < stat.qval.length; i++) {
-            series.push([x(stat.qval[i]), y(stat.aveint[i])]);
+        for(var i = 0; i < result.qval.length; i++) {
+            series.push([x(result.qval[i]), y(result.aveint[i])]);
         }
 
         var color = d3.scale.category10();

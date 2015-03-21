@@ -52,7 +52,7 @@ var get_resolution = function(inq, lambda, lambdaWidth, ddet, apoff,
     var use_lense = false; //TODO:
 
     s1 *= 0.5 * 0.1; // ORIG: convert to radisu and [cm]
-    s2 *= 0.5 * 0.1; 
+    s2 *= 0.5 * 0.1;
     l1 *= 100; // ORIG: [cm]
     l1 -= apoff; // ORIG: correct the distance
 
@@ -100,7 +100,7 @@ var get_resolution = function(inq, lambda, lambdaWidth, ddet, apoff,
     var fv = inc_gamma / (fsubs * Math.sqrt(Math.PI)) - r0*r0 * (fr-1.0)*(fr-1.0)/v_d;
 
     var rmd = fr * r0;
-    var v_r1 = v_b + fv*v + v_g;
+    var v_r1 = v_b + fv*v_d + v_g;
     var rm = rmd + 0.5*v_r1/rmd;
     var v_r = v_r1 - 0.5*(v_r1/rmd)*(v_r1/rmd);
     if(v_r < 0.0) {
@@ -127,147 +127,154 @@ var sourceToSampleDist = function(ng, s12, l2diff, type) {
     alert("ERROR: sourceToSampleDist");
 }
 
-var stat = {
-    pixelsX: 128,
-    pixelsY: 128,
+var Stat = function() {
+    var stat = this;
+    stat.pixelsX = 128;
+    stat.pixelsY = 128;
+    stat.xcenter = stat.pixelsX/2 + 0.5;
+    stat.ycenter = stat.pixelsY/2 + 0.5;
+
+    stat.x0 = 64;
+    stat.y0 = 64;
+    stat.sx = 5.08; // mm/pixel(x)
+    stat.sx3 = 10000; //nonlinear coeff
+    stat.sy = 5.08; // mm/pixel(y)
+    stat.sy3 = 10000; //nonlinear coeff
+
+    stat.dtsize = 650; // detector size in mm
+    stat.dtdist = 13170; // detector distance in mm
+
+    stat.dr = 1; // annulus width set by user, default is one
+    stat.ddr = stat.dr * stat.sx; //step size, in mm
+
+    stat.rcentr = 100;
+    stat.large_num = 1;
+    stat.small_num = 1e-10;
+
+    stat.bs = 76.2;
+    stat.s1 = 50;
+    stat.s2 = 6.35;
+    stat.l1 = sourceToSampleDist(1, 54.8, 5, "chamber");
+    stat.l2 = 13.17;
+    stat.lambdaWidth = 0.125;
+    stat.apoff = 5.0;
+    stat.ddet = 0.5;
+
+    stat.lambda = 8.4;
 };
-stat.xcenter = stat.pixelsX/2 + 0.5;
-stat.ycenter = stat.pixelsY/2 + 0.5;
 
-stat.x0 = 64;
-stat.y0 = 64;
-stat.sx = 5.08; // mm/pixel(x)
-stat.sx3 = 10000; //nonlinear coeff
-stat.sy = 5.08; // mm/pixel(y)
-stat.sy3 = 10000; //nonlinear coeff
+Stat.prototype.calculate = function() {
+    var stat = this;
 
-stat.dtsize = 650; // detector size in mm
-stat.dtdist = 13170; // detector distance in mm
+    var qval = vec(500, 0);
+    var aveint = vec(500, 0);
+    var ncells = vec(500, 0);
+    var dsq = vec(500, 0);
+    var sigave = vec(500, 0);
+    var qbar = vec(500, 0);
+    var sigmaq = vec(500, 0);
+    var fsubs = vec(500, 0);
 
-stat.dr = 1; // annulus width set by user, default is one
-stat.ddr = stat.dr * stat.sx; //step size, in mm
+    var dxbm = fx(stat.x0, stat.sx3, stat.xcenter, stat.sx);
+    var dybm = fx(stat.y0, stat.sy3, stat.ycenter, stat.sy);
 
-stat.rcentr = 100;
-stat.large_num = 1;
-stat.small_num = 1e-10;
+    var nq = 1;
 
-stat.qval = vec(500, 0);
-stat.aveint = vec(500, 0);
-stat.ncells = vec(500, 0);
-stat.dsq = vec(500, 0);
-stat.sigave = vec(500, 0);
-stat.qbar = vec(500, 0);
-stat.sigmaq = vec(500, 0);
-stat.fsubs = vec(500, 0);
-stat.dtdis2 = stat.dtdist * stat.dtdist;
-stat.xoffst = 0;
-stat.dxbm = fx(stat.x0, stat.sx3, stat.xcenter, stat.sx);
-stat.dybm = fx(stat.y0, stat.sy3, stat.ycenter, stat.sy);
+    var data = mat(stat.pixelsX, stat.pixelsY, 1);
 
-var nq = 1;
-var di, dx, jj, data_pixel, yj, dyj, dy, mask_val = 0.1;
-var dr2, nd, fd, nd2, ll, kk, dxx, dyy, ir, dphi_p;
+    // mask three pixels all around, I don't know why...
+    // many loops are based on 1-based index, because original subroutine was
+    // written in FORTRAN, sigh...
+    for(var i = 3; i < stat.pixelsX-3; i++) {
+        var dxi = fx(i+1, stat.sx3, stat.xcenter, stat.sx);
+        var dx = dxi - dxbm;
+        for(var j = 3; j < stat.pixelsY-3; j++) {
+            var dyi = fx(j+1, stat.sy3, stat.ycenter, stat.sy);
+            var dy = dyi - dybm;
 
-var data = mat(stat.pixelsX, stat.pixelsY, 1);
+            var dr2 = Math.sqrt(dx*dx + dy*dy);
 
-// mask three pixels all around, I don't know why...
-// many loops are based on 1-based index, because original subroutine was
-// written in FORTRAN, sigh...
-for(var i = 3; i < stat.pixelsX-3; i++) {
-    var dxi = fx(i+1, stat.sx3, stat.xcenter, stat.sx);
-    var dx = dxi - stat.dxbm;
-    for(var j = 3; j < stat.pixelsY-3; j++) {
-        var dyi = fx(j+1, stat.sy3, stat.ycenter, stat.sy);
-        var dy = dyi - stat.dybm;
-
-        var dr2 = Math.sqrt(dx*dx + dy*dy);
-
-        var nd, fd;
-        if(dr2 > stat.rcentr) {
-            // ORIG: keep pixel whole
-            nd = 1;
-            fd = 1;
-        } else {
-            // ORIG: break pixel into 9 equal parts
-            nd = 3;
-            fd = 2;
-        }
-        var nd2 = nd * nd;
-        for(var l = 1; l <= nd; l++) {
-            var dxx = dx + (l - fd)*stat.sx/3;
-            for(var k = 1; k <= nd; k++) {
-                var dyy = dy + (k - fd)*stat.sy/3;
-
-                nq = increment_pixel(data[i][j], stat.ddr, dxx, dyy,
-                    stat.aveint, stat.dsq, stat.ncells, nq, nd2);
-            }
-        }
-    }
-}
-
-var lambda = 8.4;
-var ntotal = 0;
-for(var i = 0; i < nq; i++) {
-    var rr = (2*i + 1) * stat.ddr / 2;
-    var theta = 0.5 * Math.atan(rr / stat.dtdist);
-    stat.qval[i] = (4 * Math.PI / lambda) * Math.sin(theta);
-    if(stat.ncells[i] == 0) {
-        // ORIG: no pixels in annuli, data unknown
-        stat.aveint[i] = 0;
-        stat.sigave[i] = stat.large_num;
-    } else {
-        if(stat.ncells[i] <= 1) {
-            // ORIG: need more than one pixel to determine error
-            stat.aveint[i] /= stat.ncells[i];
-            stat.sigave[i] = stat.large_num;
-        } else {
-            // ORIG: assume that the intensity in each pixel in annuli is normally
-            // ORIG: distributed about mean...
-            stat.aveint[i] /= stat.ncells[i];
-            var avesq = (stat.aveint[i] * stat.aveint[i]);
-            var aveisq = stat.dsq[i] / stat.ncells[i];
-            var v = aveisq - avesq;
-            if(v <= 0) {
-                stat.sigave[i] = stat.small_num;
+            var nd, fd;
+            if(dr2 > stat.rcentr) {
+                // ORIG: keep pixel whole
+                nd = 1;
+                fd = 1;
             } else {
-                stat.sigave[i] = Math.sqrt(v / (stat.ncells[i] - 1));
+                // ORIG: break pixel into 9 equal parts
+                nd = 3;
+                fd = 2;
+            }
+            var nd2 = nd * nd;
+            for(var l = 1; l <= nd; l++) {
+                var dxx = dx + (l - fd)*stat.sx/3;
+                for(var k = 1; k <= nd; k++) {
+                    var dyy = dy + (k - fd)*stat.sy/3;
+
+                    nq = increment_pixel(data[i][j], stat.ddr, dxx, dyy,
+                        aveint, dsq, ncells, nq, nd2);
+                }
             }
         }
     }
-    ntotal += stat.ncells[i];
-}
 
-// ORIG: Do the extra 3 columns of resolution calculations starting here.
+    var ntotal = 0;
+    for(var i = 0; i < nq; i++) {
+        var rr = (2*i + 1) * stat.ddr / 2;
+        var theta = 0.5 * Math.atan(rr / stat.dtdist);
+        qval[i] = (4 * Math.PI / stat.lambda) * Math.sin(theta);
+        if(ncells[i] == 0) {
+            // ORIG: no pixels in annuli, data unknown
+            aveint[i] = 0;
+            sigave[i] = stat.large_num;
+        } else {
+            if(ncells[i] <= 1) {
+                // ORIG: need more than one pixel to determine error
+                aveint[i] /= ncells[i];
+                sigave[i] = stat.large_num;
+            } else {
+                // ORIG: assume that the intensity in each pixel in annuli is normally
+                // ORIG: distributed about mean...
+                aveint[i] /= ncells[i];
+                var avesq = (aveint[i] * aveint[i]);
+                var aveisq = dsq[i] / ncells[i];
+                var v = aveisq - avesq;
+                if(v <= 0) {
+                    sigave[i] = stat.small_num;
+                } else {
+                    sigave[i] = Math.sqrt(v / (ncells[i] - 1));
+                }
+            }
+        }
+        ntotal += ncells[i];
+    }
 
-var bs = 76.2;
-var s1 = 50;
-var s2 = 6.35;
-var l1 = sourceToSampleDist(1, 54.8, 5, "chamber");
-var l2 = 13.17;
-var lambdaWidth = 0.125;
-var apoff = 5.0;
-var ddet = 0.5;
+    // ORIG: Do the extra 3 columns of resolution calculations starting here.
+    for(var i = 0; i < nq; i++) {
+        var obj = get_resolution(qval[i],
+            stat.lambda, stat.lambdaWidth,
+            stat.ddet, stat.apoff,
+            stat.s1, stat.s2, stat.l1, stat.l2, stat.bs, stat.ddr);
 
-for(var i = 0; i < nq; i++) {
-    var obj = get_resolution(stat.qval[i], lambda, lambdaWidth, ddet, apoff,
-        s1, s2, l1, l2, bs, stat.ddr);
-    
-    stat.sigmaq[i] = obj.sigmaq;
-    stat.qbar[i] = obj.qbar;
-    stat.fsubs[i] = obj.fsubs;
-}
-for(var i = 0; i < stat.fsubs.length; i++) {
-    // ORIG: keep the values from being too small
-    stat.fsubs[i] += 1e-8;
-}
+        sigmaq[i] = obj.sigmaq;
+        qbar[i] = obj.qbar;
+        fsubs[i] = obj.fsubs;
+    }
+    for(var i = 0; i < fsubs.length; i++) {
+        // ORIG: keep the values from being too small
+        fsubs[i] += 1e-8;
+    }
 
-stat.aveint = debye(1000, 100, 0.0, stat.qval);
-for(var i = 0; i < stat.aveint.length; i++) {
-    stat.aveint[i] *= stat.fsubs[i];
-}
+    aveint = debye(1000, 100, 0.0, qval);
+    for(var i = 0; i < aveint.length; i++) {
+        aveint[i] *= fsubs[i];
+    }
 
-var len = stat.qval.indexOf(0);
-stat.qval.splice(len);
-stat.aveint.splice(len);
-console.log(stat);
+    var len = qval.indexOf(0);
+    qval.splice(len);
+    aveint.splice(len);
+    return {
+        qval: qval,
+        aveint: aveint,
+    };
+};
 
